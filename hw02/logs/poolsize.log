@@ -1,0 +1,56 @@
+=== pool_size=8 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 277570
+number of failed transactions: 0 (0.000%)
+latency average = 48.531 ms
+initial connection time = 3124.935 ms
+tps = 10302.767060 (without initial connection time)
+=== pool_size=16 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 258362
+number of failed transactions: 0 (0.000%)
+latency average = 52.204 ms
+initial connection time = 3107.039 ms
+tps = 9577.792269 (without initial connection time)
+=== pool_size=32 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 233801
+number of failed transactions: 0 (0.000%)
+latency average = 57.690 ms
+initial connection time = 3106.214 ms
+tps = 8667.053309 (without initial connection time)
+=== pool_size=64 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 229589
+number of failed transactions: 0 (0.000%)
+latency average = 58.756 ms
+initial connection time = 3093.191 ms
+tps = 8509.748577 (without initial connection time)

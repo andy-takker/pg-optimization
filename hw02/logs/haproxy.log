@@ -1,0 +1,84 @@
+=== haproxy c=500 run=1 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 197045
+number of failed transactions: 0 (0.000%)
+latency average = 68.235 ms
+initial connection time = 3204.222 ms
+tps = 7327.651622 (without initial connection time)
+=== haproxy c=500 run=2 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 198731
+number of failed transactions: 0 (0.000%)
+latency average = 67.647 ms
+initial connection time = 3216.907 ms
+tps = 7391.311026 (without initial connection time)
+=== haproxy c=500 run=3 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 201998
+number of failed transactions: 0 (0.000%)
+latency average = 66.577 ms
+initial connection time = 3202.807 ms
+tps = 7510.132552 (without initial connection time)
+=== haproxy c=500 run=1 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 246985
+number of failed transactions: 0 (0.000%)
+latency average = 54.385 ms
+initial connection time = 3222.546 ms
+tps = 9193.682909 (without initial connection time)
+=== haproxy c=500 run=2 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 251582
+number of failed transactions: 0 (0.000%)
+latency average = 53.388 ms
+initial connection time = 3223.667 ms
+tps = 9365.473551 (without initial connection time)
+=== haproxy c=500 run=3 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 254215
+number of failed transactions: 0 (0.000%)
+latency average = 52.827 ms
+initial connection time = 3228.024 ms
+tps = 9464.802933 (without initial connection time)

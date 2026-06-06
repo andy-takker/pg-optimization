@@ -1,0 +1,126 @@
+=== odyssey c=50 run=1 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 50
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 213089
+number of failed transactions: 0 (0.000%)
+latency average = 6.906 ms
+initial connection time = 576.808 ms
+tps = 7240.299460 (without initial connection time)
+=== odyssey c=50 run=2 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 50
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 215343
+number of failed transactions: 0 (0.000%)
+latency average = 6.836 ms
+initial connection time = 565.824 ms
+tps = 7314.273238 (without initial connection time)
+=== odyssey c=50 run=3 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 50
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 216919
+number of failed transactions: 0 (0.000%)
+latency average = 6.784 ms
+initial connection time = 575.528 ms
+tps = 7370.117725 (without initial connection time)
+=== odyssey c=200 run=1 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 200
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 196186
+number of failed transactions: 0 (0.000%)
+latency average = 28.282 ms
+initial connection time = 2290.313 ms
+tps = 7071.581187 (without initial connection time)
+=== odyssey c=200 run=2 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 200
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 193244
+number of failed transactions: 0 (0.000%)
+latency average = 28.716 ms
+initial connection time = 2285.200 ms
+tps = 6964.768494 (without initial connection time)
+=== odyssey c=200 run=3 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 200
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 195715
+number of failed transactions: 0 (0.000%)
+latency average = 28.331 ms
+initial connection time = 2306.305 ms
+tps = 7059.406248 (without initial connection time)
+=== odyssey c=500 run=1 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 161162
+number of failed transactions: 0 (0.000%)
+latency average = 75.865 ms
+initial connection time = 5634.006 ms
+tps = 6590.659373 (without initial connection time)
+=== odyssey c=500 run=2 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 160557
+number of failed transactions: 0 (0.000%)
+latency average = 76.165 ms
+initial connection time = 5632.591 ms
+tps = 6564.684283 (without initial connection time)
+=== odyssey c=500 run=3 ===
+pgbench (18.4 (Ubuntu 18.4-1.pgdg24.04+1))
+transaction type: /var/lib/postgresql/workload.sql
+scaling factor: 1
+query mode: simple
+number of clients: 500
+number of threads: 4
+maximum number of tries: 1
+duration: 30 s
+number of transactions actually processed: 162305
+number of failed transactions: 0 (0.000%)
+latency average = 75.220 ms
+initial connection time = 5667.775 ms
+tps = 6647.196401 (without initial connection time)
