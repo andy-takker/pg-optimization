@@ -1,0 +1,21 @@
+Загрузка: /tmp/tickets.csv — 5 185 505 строк, 289.7 MB
+Цель: book.tickets_load (LIKE book.tickets, без индексов)
+
+=== COPY (\COPY ... FROM ... WITH CSV), TRUNCATE между прогонами ===
+run=1  real 0m8.723s   (user 0m0.500s sys 0m0.705s)
+run=2  real 0m9.071s   (user 0m0.505s sys 0m0.572s)
+run=3  real 0m10.053s  (user 0m0.522s sys 0m0.401s)
+
+=== pgloader 3.6.10~devel, WITH truncate ===
+run=1:
+             table name     errors       rows      bytes      total time
+-----------------------  ---------  ---------  ---------  --------------
+                  fetch          0          0                     0.006s
+  "book"."tickets_load"          0    5185505   289.7 MB        3m2.160s
+        Files Processed          0          1                     0.025s
+COPY Threads Completion          0          2                   3m2.160s
+      Total import time          OK   5185505   289.7 MB        3m2.185s
+real 3m3.011s   user 3m34.195s  sys 0m39.257s   <-- user > real: CPU-bound
+
+run=2: total 3m13.147s; real 3m13.984s, user 3m46.929s, sys 0m41.066s
+run=3: total 2m57.842s; real 2m58.683s, user 3m28.635s, sys 0m39.685s

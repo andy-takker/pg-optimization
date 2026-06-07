@@ -1,0 +1,62 @@
+Методика: sudo pg_ctlcluster 18 main stop
+          sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
+          sudo pg_ctlcluster 18 main start
+Запрос:   EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM book.tickets_part WHERE fio LIKE 'IVANOV%';
+Везде jit = off.
+
+=== Уровень 1: горячий (shared_buffers), любая раскладка ===
+ Finalize Aggregate (actual time=281.574..297.081 / 278.801..293.821)
+   Buffers: shared hit=70870        <-- всё из кеша PG
+ Execution Time: 294-298 ms
+
+=== Уровень 2: "тёплый" — после рестарта PG (page cache ОС жив!) ===
+-- 3 диска:
+ Finalize Aggregate (actual time=699.998..708.576)
+   Buffers: shared read=70870
+   I/O Timings: shared read=517.103   <-- ~7 мкс/страница: это чтение из page cache ОС, не с диска
+ Planning Time: 29.129 ms
+ Execution Time: 710.073 ms
+-- 1 диск (pg_default):
+ Execution Time: 651.151 ms, I/O Timings: shared read=370.344
+
+=== Уровень 3: истинно холодный (drop_caches), 1 диск pg_default ===
+ Finalize Aggregate  (cost=110000.43..110000.44 rows=1 width=8) (actual time=2318.283..2331.558 rows=1.00 loops=1)
+   Buffers: shared read=70870
+   I/O Timings: shared read=5712.221
+   ->  Gather ... Workers Launched: 2
+         ->  Parallel Append (actual time=2276.236..2276.271 loops=3)
+               [выдержки посекционных I/O Timings — однородные, всё на одном pd-ssd:]
+               tickets_p20000324: read=855, I/O=38.159   tickets_p20000317: read=855, I/O=36.005
+               tickets_p20000409: read=848, I/O=90.352   tickets_p20000321: read=845, I/O=76.039
+               tickets_p20000301: read=835, I/O=73.183   tickets_p20000205: read=622, I/O=21.132
+ Planning:
+   Buffers: shared hit=5262 read=409
+   I/O Timings: shared read=1288.632
+ Planning Time: 1418.917 ms          <-- холодное планирование на 100 секциях = 1.4 секунды!
+ Execution Time: 2335.604 ms
+
+=== Уровень 3: истинно холодный (drop_caches), 3 диска (34 pg_default / 33 ts_ssd / 33 ts_hdd) ===
+ Finalize Aggregate  (cost=110000.43..110000.44 rows=1 width=8) (actual time=2860.800..2874.175 rows=1.00 loops=1)
+   Buffers: shared read=70870
+   I/O Timings: shared read=7413.611
+   ->  Gather ... Workers Launched: 2
+         ->  Parallel Append (actual time=2836.266..2836.310 loops=3)
+               [выдержки: двугорбое распределение I/O по секциям]
+               -- секции на SSD (остаток даты %3 = 0,1):
+               tickets_p20000317: read=855, I/O=71.118    tickets_p20000409: read=848, I/O=69.319
+               tickets_p20000328: read=838, I/O=64.809    tickets_p20000301: read=835, I/O=40.662
+               tickets_p20000319: read=825, I/O=36.118    tickets_p20000314: read=821, I/O=36.980
+               -- секции на HDD (остаток %3 = 2):
+               tickets_p20000324: read=855, I/O=159.008   tickets_p20000326: read=850, I/O=157.998
+               tickets_p20000303: read=850, I/O=157.308   tickets_p20000318: read=845, I/O=147.767
+               tickets_p20000327: read=844, I/O=149.719   tickets_p20000408: read=834, I/O=132.085
+               tickets_p20000112: read=626, I/O=150.747   tickets_p20000207: read=623, I/O=141.021
+               tickets_p20000205: read=622, I/O=241.552   tickets_p20000103: read=624, I/O=150.230
+ Planning:
+   Buffers: shared hit=5330 read=371 dirtied=2
+   I/O Timings: shared read=934.403
+ Planning Time: 1006.062 ms
+ Execution Time: 2876.349 ms
+
+Вывод: Parallel Append финиширует по самому медленному диску; HDD-треть (I/O 130-240 мс/секция
+против 36-76 мс на SSD) съела потенциальный выигрыш параллельного IO, дав +23% замедления.

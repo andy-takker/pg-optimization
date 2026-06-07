@@ -1,0 +1,43 @@
+Диск: /dev/sdb (pd-ssd 20GB), на каждую ФС: mkfs -> mount -> tablespace ts_fs ->
+COPY x2 -> stop PG -> drop_caches -> start -> seq scan x2 (холодный + тёплый)
+Таблица: book.fs_test (LIKE book.tickets), 5 185 505 строк.
+
+=== ext4 (mkfs.ext4 -m 0) ===
+COPY:  run1 real 0m9.164s, run2 real 0m8.440s
+Холодный scan:
+ Finalize Aggregate (actual time=4150.145..4164.331)
+   Buffers: shared read=58976 dirtied=32711      <-- dirtied! hint bits
+   I/O Timings: shared read=15.087               <-- чтение заняло 15 мс из 4165!
+ Execution Time: 4165.356 ms
+Тёплый scan:
+ Buffers: shared hit=58976
+ Execution Time: 427.366 ms
+
+=== xfs (mkfs.xfs) ===
+COPY:  run1 real 0m8.863s, run2 real 0m8.785s
+Холодный scan:
+ Finalize Aggregate (actual time=6755.783..6769.933)
+   Buffers: shared read=58976 dirtied=58926      <-- грязнится ВСЯ таблица
+   I/O Timings: shared read=15.350
+ Execution Time: 6771.086 ms
+Тёплый scan:
+ Buffers: shared hit=58976
+ Execution Time: 444.821 ms
+
+=== btrfs (mkfs.btrfs) ===
+COPY:  run1 real 0m9.121s, run2 real 0m9.024s
+Холодный scan:
+ Finalize Aggregate (actual time=7087.183..7100.166)
+   Buffers: shared read=58976 dirtied=58926
+   I/O Timings: shared read=25.045
+ Execution Time: 7101.511 ms
+Тёплый scan:
+ Buffers: shared hit=58976
+ Execution Time: 502.147 ms
+
+ВАЖНО (методическая находка): "холодные" сканы непригодны для сравнения ФС —
+первый scan после COPY выставляет hint bits (dirtied=32711..58926), а при включённых
+checksums (дефолт PG 18) это полностраничные записи в WAL. Чтение при этом заняло
+15-25 мс (I/O Timings). У ext4 половину таблицы успел обработать автовакуум в паузе
+между командами, поэтому dirtied вдвое меньше и время "лучше". Лекарство: COPY WITH FREEZE.
+Сравнивать корректно: запись (паритет ~9 c) и тёплое чтение (427/445/502 мс).

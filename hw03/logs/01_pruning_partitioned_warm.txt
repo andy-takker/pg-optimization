@@ -1,0 +1,52 @@
+=== A1: секционированная, 1 день (горячий кеш) ===
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM book.tickets_part WHERE startDate = '2000-02-01';
+
+ Aggregate  (cost=1262.23..1262.24 rows=1 width=8) (actual time=11.540..11.541 rows=1.00 loops=1)
+   Buffers: shared hit=202
+   ->  Index Only Scan using tickets_p20000201_startdate_id_idx1 on tickets_p20000201 tickets_part  (cost=0.29..1132.26 rows=51987 width=0) (actual time=0.135..8.354 rows=51987.00 loops=1)
+         Index Cond: (startdate = '2000-02-01'::date)
+         Heap Fetches: 0
+         Index Searches: 1
+         Buffers: shared hit=202
+ Planning:
+   Buffers: shared hit=478
+ Planning Time: 2.310 ms
+ Execution Time: 11.791 ms
+
+=== A2: секционированная, 10 дней (горячий кеш) — pruning 10 из 100 ===
+ Finalize Aggregate  (cost=11106.86..11106.87 rows=1 width=8) (actual time=64.408..71.655 rows=1.00 loops=1)
+   Buffers: shared hit=2019
+   ->  Gather ... Workers Launched: 2
+         ->  Parallel Append  (cost=1013.13..10104.40 rows=10 width=8) (actual time=18.931..56.464 rows=4.33 loops=3)
+               [10 × Partial Aggregate -> Parallel Index Only Scan по секциям
+                tickets_p20000201 ... tickets_p20000210, каждая ~200-204 буфера, Heap Fetches: 0]
+ Planning:
+   Buffers: shared hit=479
+ Planning Time: 2.027 ms
+ Execution Time: 72.115 ms
+
+=== A3: секционированная, fio LIKE 'IVANOV%' (горячий кеш, JIT ON) ===
+ Finalize Aggregate  (cost=110000.43..110000.44 rows=1 width=8) (actual time=543.881..570.933 rows=1.00 loops=1)
+   Buffers: shared hit=70870
+   ->  Gather ... Workers Launched: 2
+         ->  Parallel Append  (cost=0.00..108999.71 rows=200 width=0)
+               [100 × Parallel Seq Scan по всем секциям, Filter: (fio ~~ 'IVANOV%'),
+                Rows Removed by Filter: ~51700-52000 на секцию, 622-855 буферов на секцию]
+ Planning:
+   Buffers: shared hit=4777
+ Planning Time: 15.921 ms
+ JIT:
+   Functions: 908
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 70.462 ms (Deform 29.306 ms), Inlining 0.000 ms, Optimization 31.430 ms, Emission 534.562 ms, Total 636.454 ms
+ Execution Time: 636.378 ms
+
+=== A3 с SET jit = off (горячий кеш) ===
+ Finalize Aggregate (actual time=312.413..337.954 rows=1.00 loops=1)
+   Buffers: shared hit=70870
+   [тот же Parallel Append из 100 сканов]
+ Planning Time: 17.402 ms
+ Execution Time: 339.265 ms
+
+Полные 400+ строчные версии планов A3 сохранены в чек-листах сессии;
+здесь приведены шапки и итоги — посекционная часть однородна (см. выдержки в 03_cold_cache_levels.txt).

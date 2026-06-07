@@ -109,4 +109,13 @@ CREATE INDEX ON book.tickets_part (startDate, id);
 
 ## 8. Воспроизведение
 
-DDL секционирования, перенос по tablespace (`\gexec`-генерация), методика drop_caches и конфиги — в тексте отчёта; полные планы EXPLAIN — в [logs/](logs/) (опционально).
+Все артефакты — в [logs/](logs/):
+
+- [00_commands.sql](logs/00_commands.sql) — DDL секционирования, `\gexec`-генерация секций и раскладки по tablespace, методика drop_caches, тестовые запросы
+- [01_pruning_partitioned_warm.txt](logs/01_pruning_partitioned_warm.txt) — планы A1/A2/A3 по секционированной таблице (вкл. блок JIT: 908 функций)
+- [02_pruning_plain_warm.txt](logs/02_pruning_plain_warm.txt) — планы-эквиваленты по обычной таблице
+- [03_cold_cache_levels.txt](logs/03_cold_cache_levels.txt) — три уровня кеша + двугорбые посекционные I/O Timings (SSD vs HDD)
+- [04_copy_vs_pgloader.txt](logs/04_copy_vs_pgloader.txt) — полные сводки pgloader и тайминги COPY
+- [05_filesystems.txt](logs/05_filesystems.txt) — планы по ext4/xfs/btrfs с разбором hint-bits-эффекта
+
+Планы на 400+ строк (скан 100 секций) приведены в виде шапки/итогов + характерных посекционных выдержек — посекционная часть однородна и в полном виде не добавляет информации.

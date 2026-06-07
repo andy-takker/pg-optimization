@@ -1,0 +1,58 @@
+=== B1: обычная таблица, 1 день (JOIN ride) ===
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT count(*) FROM book.tickets t JOIN book.ride r ON r.id = t.fkRide
+WHERE r.startDate = '2000-02-01';
+
+ Finalize Aggregate  (cost=89916.40..89916.41 rows=1 width=8) (actual time=559.271..575.542 rows=1.00 loops=1)
+   Buffers: shared hit=61376
+   ->  Gather  (cost=89916.18..89916.39 rows=2 width=8) (actual time=558.875..575.530 rows=3.00 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=61376
+         ->  Partial Aggregate  (cost=88916.18..88916.19 rows=1 width=8) (actual time=531.214..531.217 rows=1.00 loops=3)
+               Buffers: shared hit=61376
+               ->  Hash Join  (cost=2617.10..88864.88 rows=20521 width=0) (actual time=30.127..529.356 rows=17329.00 loops=3)
+                     Hash Cond: (t.fkride = r.id)
+                     Buffers: shared hit=61376
+                     ->  Parallel Seq Scan on tickets t  (cost=0.00..80577.28 rows=2160128 width=4) (actual time=0.029..193.521 rows=1728501.67 loops=3)
+                           Buffers: shared hit=58976
+                     ->  Hash  (cost=2600.00..2600.00 rows=1368 width=4) (actual time=17.262..17.263 rows=1440.00 loops=3)
+                           Buckets: 2048  Batches: 1  Memory Usage: 67kB
+                           Buffers: shared hit=2400
+                           ->  Seq Scan on ride r  (cost=0.00..2600.00 rows=1368 width=4) (actual time=5.774..16.862 rows=1440.00 loops=3)
+                                 Filter: (startdate = '2000-02-01'::date)
+                                 Rows Removed by Filter: 142560
+                                 Buffers: shared hit=2400
+ Planning:
+   Buffers: shared hit=167
+ Planning Time: 0.848 ms
+ Execution Time: 575.631 ms
+
+=== B2: обычная таблица, 10 дней ===
+ Finalize Aggregate  (cost=90922.53..90922.54 rows=1 width=8) (actual time=711.881..727.608 rows=1.00 loops=1)
+   Buffers: shared hit=61376
+   ->  Gather ... Workers Launched: 2
+         ->  Partial Aggregate (actual time=688.481..688.485 rows=1.00 loops=3)
+               ->  Hash Join  (cost=3138.62..89386.41 rows=214362 width=0) (actual time=22.372..670.270 rows=172915.00 loops=3)
+                     Hash Cond: (t.fkride = r.id)
+                     ->  Parallel Seq Scan on tickets t (actual time=0.019..183.581 rows=1728501.67 loops=3)
+                           Buffers: shared hit=58976
+                     ->  Hash  (actual time=22.120..22.121 rows=14400.00 loops=3)
+                           Buckets: 16384  Batches: 1  Memory Usage: 635kB
+                           ->  Seq Scan on ride r (actual time=4.793..17.530 rows=14400.00 loops=3)
+                                 Filter: ((startdate >= '2000-02-01'::date) AND (startdate < '2000-02-11'::date))
+                                 Rows Removed by Filter: 129600
+ Planning Time: 0.293 ms
+ Execution Time: 727.665 ms
+
+=== B3: обычная таблица, fio LIKE 'IVANOV%' ===
+ Finalize Aggregate  (cost=86978.35..86978.36 rows=1 width=8) (actual time=273.110..288.075 rows=1.00 loops=1)
+   Buffers: shared hit=58976
+   ->  Gather ... Workers Launched: 2
+         ->  Partial Aggregate (actual time=245.671..245.673 rows=1.00 loops=3)
+               ->  Parallel Seq Scan on tickets  (cost=0.00..85977.60 rows=213 width=0) (actual time=245.666..245.667 rows=0.00 loops=3)
+                     Filter: (fio ~~ 'IVANOV%'::text)
+                     Rows Removed by Filter: 1728502
+                     Buffers: shared hit=58976
+ Planning Time: 0.147 ms
+ Execution Time: 288.120 ms
