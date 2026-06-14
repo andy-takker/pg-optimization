@@ -1,0 +1,40 @@
+## Эксперимент hot_standby_feedback: конфликт долгого запроса на реплике с recovery.
+## Реплика postgres4r (прямой standby мастера). max_standby_streaming_delay=30s (дефолт).
+
+### Подготовка (на мастере): две таблицы по 300k uuid-строк ###
+DROP TABLE IF EXISTS hsf1, hsf2;
+CREATE TABLE hsf1 (u1 uuid, u2 uuid, u3 uuid);
+CREATE TABLE hsf2 (u1 uuid, u2 uuid, u3 uuid);
+INSERT INTO hsf1 SELECT gen_random_uuid(),gen_random_uuid(),gen_random_uuid() FROM generate_series(1,300000);
+INSERT INTO hsf2 SELECT gen_random_uuid(),gen_random_uuid(),gen_random_uuid() FROM generate_series(1,300000);
+
+### Долгий запрос (на реплике) — держит снапшот ~40-70 с ###
+select count(*) from hsf1 a join hsf2 b on a.u1::text != b.u1::text where a.u1::text like '%000%';
+
+### Параллельно на мастере — выкос старых версий строк ###
+UPDATE hsf1 SET u1=gen_random_uuid();   -- UPDATE 300000
+VACUUM hsf1;
+
+## --- hot_standby_feedback = off (дефолт) ---
+postgres4r=# show hot_standby_feedback;     -> off
+postgres4r=# show max_standby_streaming_delay; -> 30s
+
+ERROR:  canceling statement due to conflict with recovery
+DETAIL:  User query might have needed to see row versions that must be removed.
+Time: 38083.822 ms (00:38.084)
+# Запрос УБИТ на 38 с (30 с задержки + время до прихода конфликтного WAL).
+
+## --- hot_standby_feedback = on ---
+postgres4r=# ALTER SYSTEM SET hot_standby_feedback='on'; SELECT pg_reload_conf();
+postgres4r=# show hot_standby_feedback;     -> on
+
+   count
+-----------
+ 424800000
+(1 row)
+Time: 47271.023 ms (00:47.271)
+# Запрос ВЫПОЛНЕН за 47 с без ошибки — реплика сообщила мастеру свой xmin,
+# VACUUM на мастере придержал удаление нужных версий строк.
+
+## Вывод: hot_standby_feedback=on спасает долгие читающие запросы на реплике ценой
+## удержания мусора на мастере (риск раздувания). Это OLTP/отчётный компромисс.

@@ -1,0 +1,35 @@
+## Каскадный лаг: replay_lag по хопам под нагрузкой (master async, pgbench -T 60)
+## Сэмплирование каждые 5 с из pg_stat_replication.
+
+# Хоп 1 (на мастере: application_name=postgres4r):
+m->r1 replay_lag=00:00:00.224918
+m->r1 replay_lag=00:00:00.015155
+m->r1 replay_lag=00:00:00.221354
+m->r1 replay_lag=00:00:00.221306
+m->r1 replay_lag=00:00:00.221860
+m->r1 replay_lag=00:00:00.013845
+m->r1 replay_lag=00:00:00.012990
+m->r1 replay_lag=00:00:00.016017
+m->r1 replay_lag=00:00:00.222125
+m->r1 replay_lag=00:00:00.220535
+
+# Хоп 2 (на postgres4r: application_name=postgres4r2):
+r1->r2 replay_lag=00:00:00.220837
+r1->r2 replay_lag=00:00:00.011545
+r1->r2 replay_lag=00:00:00.011779
+r1->r2 replay_lag=00:00:00.221559
+r1->r2 replay_lag=00:00:00.009614
+r1->r2 replay_lag=00:00:00.014366
+r1->r2 replay_lag=00:00:00.218306
+r1->r2 replay_lag=00:00:00.219090
+r1->r2 replay_lag=00:00:00.220350
+r1->r2 replay_lag=00:00:00.013960
+
+# Вывод: каждый хоп 0.01–0.22 с; потолок ~0.22 с ≈ wal_writer_delay=200ms (фоновый сброс WAL в async).
+# Сквозной master→r2 = сумма хопов = десятые доли секунды на pd-ssd.
+
+## ПРИМЕЧАНИЕ о метрике (методическая находка).
+## Первый замер делали через now() - pg_last_xact_replay_timestamp(): после конца нагрузки
+## значение росло линейно на величину sleep (3.61→7.71→11.78→...). Это НЕ backlog, а «время с последнего
+## применённого коммита» — при простое растёт само. Для лага под нагрузкой корректно брать replay_lag
+## из pg_stat_replication (выше): при простое = NULL, не растёт.

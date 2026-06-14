@@ -1,0 +1,55 @@
+## Задание со *: pg_rewind — возврат бывшего мастера репликой после failover (PG 18.4).
+## Стенд тот же: postgres4 (10.132.0.5) — старый мастер, postgres4r (10.132.0.6) — реплика 1, postgres4r2 (10.132.0.7) — каскад.
+## Идея: вместо полной перезаливки 7.3 ГБ перемотать разошедшийся кластер на новую линию времени (635 МБ).
+
+### 1. Промоут реплики r1 в новый мастер ###
+postgres4r=# SELECT pg_promote(wait => true);   -> t
+postgres4r=# select pg_is_in_recovery();        -> f   (самостоятельный мастер)
+postgres4r=# select timeline_id from pg_control_checkpoint();  -> 1  (TL переключится в 2 при первой записи)
+# разрешаем postgres ходить с других ВМ — для pg_rewind И последующего стриминга:
+host all postgres 10.132.0.0/20 scram-sha-256
+host replication postgres 10.132.0.0/20 scram-sha-256   # ОТДЕЛЬНАЯ строка! 'all' не покрывает псевдо-БД replication
+
+### 2. Старый мастер расходится (пишем данные, которых не будет на новом мастере) ###
+postgres4=# show data_checksums;   -> on   (PG18 по умолчанию; нужно для pg_rewind, иначе wal_log_hints)
+postgres4=# CREATE TABLE rewind_div(t text); INSERT INTO rewind_div VALUES ('написано на СТАРОМ мастере после промоута r1');
+postgres4=# select timeline_id from pg_control_checkpoint();  -> 1  (старая ветка — вот и расхождение)
+
+### 3. Гасим старый мастер, dry-run pg_rewind ###
+$ sudo systemctl stop postgresql@18-main
+$ pg_rewind --target-pgdata=/var/lib/postgresql/18/main \
+            --source-server="host=10.132.0.6 port=5432 user=postgres dbname=postgres" --dry-run -P
+pg_rewind: servers diverged at WAL location 3/FEB4AEE0 on timeline 1
+pg_rewind: rewinding from last common checkpoint at 3/FEB4AE30 on timeline 1
+pg_rewind: need to copy 635 MB (total source directory size is 7305 MB)   # <-- 635 МБ вместо 7.3 ГБ!
+pg_rewind: Done!
+
+### 4. Реальный прогон с -R + подъём репликой ###
+$ pg_rewind --target-pgdata=... --source-server="..." -R -P     # -R пишет standby.signal + primary_conninfo
+$ sudo systemctl start postgresql@18-main
+postgres4=# ALTER SYSTEM SET cluster_name='postgres4';   # в auto.conf приехало 'postgres4r' от источника — поправили
+postgres4=# select pg_is_in_recovery();  -> t   (стал репликой)
+postgres4=# SELECT * FROM rewind_div;    -> ERROR: relation "rewind_div" does not exist   # расхождение ОТБРОШЕНО
+
+### 5. ГРАБЛИ: унаследованный слот ###
+# Стриминг падал в цикле:
+FATAL: could not start WAL streaming: ERROR: replication slot "slot_r1" does not exist
+# Причина: perмотанный узел унаследовал primary_slot_name='slot_r1' (слот жил на нём же, на старом мастере, для r1).
+# На новом мастере такого слота нет. Лечение — создать слот на новом мастере:
+postgres4r=# SELECT pg_create_physical_replication_slot('slot_r1');
+
+### 6. Итог: failover завершён ###
+postgres4r=# select application_name, client_addr, state, sync_state from pg_stat_replication;
+ application_name | client_addr |   state   | sync_state
+------------------+-------------+-----------+------------
+ postgres4        | 10.132.0.5  | streaming | async      <- перемотанный бывший мастер теперь реплика
+ postgres4r2      | 10.132.0.7  | streaming | async      <- каскадная реплика, переехала на нового мастера автоматически
+postgres4r=# select slot_name, active from pg_replication_slots;  -> slot_cascade|t, slot_r1|t
+
+# Свежая строка нового мастера (10:43:19) доехала до postgres4 — поток идёт по timeline 2.
+
+## Выводы:
+## - pg_rewind перенёс 635 МБ вместо полных 7.3 ГБ — на порядок дешевле перезаливки.
+## - Требует data checksums (или wal_log_hints) на цели — в PG18 checksums включены по умолчанию.
+## - Отдельная строка 'host replication' в pg_hba — 'host all' её не покрывает.
+## - После failover перемотанный узел ссылается на старый слот, которого нет на новом мастере, — провизионить новый слот.

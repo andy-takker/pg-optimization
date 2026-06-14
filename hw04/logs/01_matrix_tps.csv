@@ -1,0 +1,41 @@
+topology,synchronous_commit,write_tps,read_tps
+2A,off,8053,
+2A,local,4252,
+2A,remote_write,4254,
+2A,on,4212,
+2A,remote_apply,4345,
+2A,read,,24700
+1S+1A,off,7964,
+1S+1A,local,4001,
+1S+1A,remote_write,2843,
+1S+1A,on,2468,
+1S+1A,remote_apply,2242,
+1S+1A,read,,24649
+2S_ALL,off,8145,
+2S_ALL,local,4177,
+2S_ALL,remote_write,2619,
+2S_ALL,on,2043,
+2S_ALL,remote_apply,1979,
+2S_ALL,read,,24659
+2S_ANY,off,8110,
+2S_ANY,local,4126,
+2S_ANY,remote_write,3083,
+2S_ANY,on,2551,
+2S_ANY,remote_apply,2469,
+2S_ANY,read,,24855
+A+C,off,8177,
+A+C,local,4393,
+A+C,remote_write,4482,
+A+C,on,4434,
+A+C,remote_apply,4483,
+A+C,read,,24522
+S+C,off,8145,
+S+C,local,4429,
+S+C,remote_write,3112,
+S+C,on,2700,
+S+C,remote_apply,2357,
+S+C,read,,24999
+# Топологии: 2A=две async; 1S+1A=synchronous_standby_names='postgres4r'; 2S_ALL='FIRST 2 (postgres4r,postgres4r2)';
+# 2S_ANY='ANY 1 (postgres4r,postgres4r2)'; A+C=async+каскад; S+C=синхр.+каскад.
+# pgbench -c 8 -j 4 -T 30 -n; перед каждым прогоном CHECKPOINT (иначе растянутый чекпойнт прошлого скрипта искажает первые замеры).
+# write = book.tickets INSERT (workload2.sql); read = SELECT по PK random(1,5e6) (workload.sql).
