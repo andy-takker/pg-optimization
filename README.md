@@ -15,6 +15,7 @@
 | [hw02](hw02/) | Коннектинг: vanilla vs PgBouncer vs Odyssey vs HAProxy при 500+ коннектах | GCP e2-standard-4 | Пулер — не ускоритель: ваниль быстрее на быстрых запросах, но деградирует вдвое круче; оптимум пула ≈ 2×ядра |
 | [hw03](hw03/) | ФС: секционирование по дням, секции на 3 дисках, COPY vs pgloader, ext4/xfs/btrfs | GCP + 3 диска | Pruning: ×49 по ключу, медленнее мимо ключа; COPY ×20 быстрее pgloader; разница ФС ≤15% |
 | [hw04](hw04/) | Репликация: синхр./асинхр./каскад, 5 уровней синхронного коммита, hot_standby_feedback | GCP, 3 ВМ | Синхронность вдвое режет запись на `on`; каскад не грузит мастер; `2S_ALL` медленнее кворума |
+| [hw05](hw05/) | Мониторинг: VictoriaMetrics + Grafana + postgres/node exporter + vmalert/Alertmanager | GCP, Docker | Стек собирается за минуты без суперюзера (`pg_monitor`); алерт на диск отработал; «нет алерта» ≠ «всё ок» |
 
 ## Ключевые находки
 
@@ -26,6 +27,8 @@
 | **hw03:** секционирование ускоряет только запросы по ключу | **hw03:** рестарт СУБД сбрасывает лишь первый из трёх уровней кеша |
 | [![синхронный коммит](hw04/images/sync_levels.png)](hw04/) | [![hot_standby_feedback](hw04/images/hot_standby_feedback.png)](hw04/) |
 | **hw04:** цена синхронности растёт `off→remote_apply`; ждать обе реплики дороже кворума | **hw04:** `hot_standby_feedback=on` спасает долгий запрос на реплике от вакуума мастера |
+| [![мониторинг PG](hw05/images/grafana_postgres.png)](hw05/) | [![алерт на диск](hw05/images/vmalert_diskspacelow.png)](hw05/) |
+| **hw05:** дашборд PostgreSQL под нагрузкой 25k TPS (VictoriaMetrics + Grafana) | **hw05:** алерт `DiskSpaceLow` сработал и доехал до Alertmanager |
 
 ## Стенды
 

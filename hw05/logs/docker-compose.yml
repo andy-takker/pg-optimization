@@ -1,0 +1,46 @@
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:latest
+    ports: ["8428:8428"]
+    volumes:
+      - ./scrape.yml:/etc/scrape.yml
+      - vmdata:/victoria-metrics-data
+    command: ["-promscrape.config=/etc/scrape.yml", "-retentionPeriod=1"]
+    restart: unless-stopped
+  node_exporter:
+    image: prom/node-exporter:latest
+    ports: ["9100:9100"]
+    pid: host
+    volumes: ["/:/host:ro,rslave"]
+    command: ["--path.rootfs=/host"]
+    restart: unless-stopped
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    ports: ["9187:9187"]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://monitoring:mon123@host.docker.internal:5432/thai?sslmode=disable"
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    restart: unless-stopped
+  vmalert:
+    image: victoriametrics/vmalert:latest
+    ports: ["8880:8880"]
+    volumes: ["./alerts.yml:/etc/alerts.yml"]
+    command:
+      - "-datasource.url=http://victoriametrics:8428"
+      - "-notifier.url=http://alertmanager:9093"
+      - "-remoteWrite.url=http://victoriametrics:8428"
+      - "-rule=/etc/alerts.yml"
+    restart: unless-stopped
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports: ["9093:9093"]
+    volumes: ["./alertmanager.yml:/etc/alertmanager/alertmanager.yml"]
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3000:3000"]
+    volumes: ["grafana:/var/lib/grafana"]
+    restart: unless-stopped
+volumes:
+  vmdata: {}
+  grafana: {}
