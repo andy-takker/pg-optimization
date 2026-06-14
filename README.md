@@ -17,6 +17,7 @@
 | [hw04](hw04/) | Репликация: синхр./асинхр./каскад, 5 уровней синхронного коммита, hot_standby_feedback | GCP, 3 ВМ | Синхронность вдвое режет запись на `on`; каскад не грузит мастер; `2S_ALL` медленнее кворума |
 | [hw05](hw05/) | Мониторинг: VictoriaMetrics + Grafana + postgres/node exporter + vmalert/Alertmanager | GCP, Docker | Стек собирается за минуты без суперюзера (`pg_monitor`); алерт на диск отработал; «нет алерта» ≠ «всё ок» |
 | [hw06](hw06/) | Тюнинг WAL/checkpoint: производительность vs надёжность, восстановление, сжатие WAL | GCP e2-standard-4 | `synchronous_commit=off` +80% записи; редкий чекпойнт → дольше восстановление; сжатие WAL ×4.9 на заполненных страницах |
+| [hw07](hw07/) | Тюнинг автовакуума на профиле update+delete: убираем пилу TPS | GCP e2-standard-4 | Дефолт = пила (CV 31%), отключение = деградация (CV 52%), частый автовакуум малыми порциями = ровно (CV 11%) и быстрее |
 
 ## Ключевые находки
 
@@ -32,6 +33,8 @@
 | **hw05:** дашборд PostgreSQL под нагрузкой 25k TPS (VictoriaMetrics + Grafana) | **hw05:** алерт `DiskSpaceLow` сработал и доехал до Alertmanager |
 | [![производительность vs WAL](hw06/images/perf_matrix.png)](hw06/) | [![сжатие WAL](hw06/images/wal_compression.png)](hw06/) |
 | **hw06:** `synchronous_commit=off` +80% записи; `wal_compression` режет WAL ×4.9 | **hw06:** выгода сжатия WAL зависит от данных: ×4.9 на заполненных, ×1.1 на случайных |
+| [![пила автовакуума](hw07/images/tps_over_time.png)](hw07/) | [![мёртвые строки](hw07/images/dead_tuples.png)](hw07/) |
+| **hw07:** дефолтный автовакуум даёт пилу TPS; частый малыми порциями — ровную линию | **hw07:** `n_dead_tup` во времени: монотонный рост (rare) vs пила (default) vs коридор (tuned) |
 
 ## Стенды
 
