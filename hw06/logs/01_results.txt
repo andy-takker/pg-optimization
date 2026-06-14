@@ -1,0 +1,43 @@
+## ШАГ 1. Влияние wal_level на объём WAL (INSERT 1M + UPDATE 1M + DDL)
+# три метода замера, байты
+wal_level | pg_wal_lsn_diff | pg_stat_statements | pg_waldump
+minimal   |   224 723 200   |    215 059 287     | 215 064 310
+replica   |   224 737 720   |    215 057 257     | 215 078 658
+logical   |   224 734 088   |    215 067 402     | 215 074 731
+# Вывод: при тяжёлом DML wal_level почти не влияет (~215 МБ, разброс <0.01%);
+# разница уровней — в DDL-части, на фоне DML незаметна.
+
+## ШАГ 2. Матрица производительности (pgbench TPC-B write -T60, read по PK -T30)
+config,sync_commit,fpw,wal_compression,ckpt_timeout,max_wal_size,write_tps,read_tps,wal_mb
+A,on,on,on,15min,1GB,2492.26,25692.72,173.2          # * первый прогон, «на холодную»
+B,off,on,on,15min,1GB,4498.00,26244.92,212.8         # synchronous_commit=off: +80% write
+C,on,off,on,15min,1GB,2685.76,26171.08,67.4          # full_page_writes=off: WAL ×2.6 меньше
+D,on,on,off,15min,1GB,2659.24,26123.89,848.4         # wal_compression=off: WAL ×4.9 больше
+E,on,on,on,1min,256MB,2656.39,26563.83,158.6         # частый чекпойнт
+F,on,on,on,30min,10GB,2630.78,26486.96,137.8         # редкий чекпойнт
+# Тёплый уровень synchronous_commit=on ≈ 2630–2690 (C/D/E/F); A=2492 занижен (холодный старт).
+# read ≈ 26k везде — от WAL/checkpoint не зависит.
+
+## ШАГ 3. Время восстановления после kill -9 (нагрузка 180с)
+TEST1 | ckpt=30min max_wal=10GB fpw=on | WAL_dir=721M | recovery elapsed: 4.51 s
+TEST2 | ckpt=1min  max_wal=1GB  fpw=off| WAL_dir=529M | recovery elapsed: 2.90 s
+TEST3 | ckpt=1min  max_wal=1GB  fpw=on | WAL_dir=513M | recovery elapsed: 2.19 s
+# Редкий чекпойнт -> больше WAL к проигрыванию -> дольше восстановление. fpw на recovery не влияет.
+
+## ШАГ 4а. pg_test_fsync (1×8 КБ, ops/sec)
+open_datasync       1281.845
+fdatasync           1284.310   <- дефолт Linux, лучший
+fsync                449.677
+open_sync            446.641
+fsync_writethrough   n/a
+# fdatasync/open_datasync ≈ ×2.9 быстрее fsync/open_sync.
+
+## ШАГ 4б. Сжатие WAL (UPDATE всей таблицы = FPI)
+# UUID-таблица (случайные данные, плохо сжимаются):
+wal_compression=off  : 187.6 MB
+wal_compression=pglz : 171.8 MB
+wal_compression=lz4  : 172.3 MB
+wal_compression=zstd : 166.1 MB   <- лучший, но выигрыш всего ~11%
+# Для сравнения, pgbench TPC-B (страницы с заполнением) из Шага 2:
+#   off=848 МБ vs on(pglz)=173 МБ  -> ×4.9
+# Вывод: эффект сжатия WAL сильно зависит от сжимаемости данных.

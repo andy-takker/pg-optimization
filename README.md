@@ -16,6 +16,7 @@
 | [hw03](hw03/) | ФС: секционирование по дням, секции на 3 дисках, COPY vs pgloader, ext4/xfs/btrfs | GCP + 3 диска | Pruning: ×49 по ключу, медленнее мимо ключа; COPY ×20 быстрее pgloader; разница ФС ≤15% |
 | [hw04](hw04/) | Репликация: синхр./асинхр./каскад, 5 уровней синхронного коммита, hot_standby_feedback | GCP, 3 ВМ | Синхронность вдвое режет запись на `on`; каскад не грузит мастер; `2S_ALL` медленнее кворума |
 | [hw05](hw05/) | Мониторинг: VictoriaMetrics + Grafana + postgres/node exporter + vmalert/Alertmanager | GCP, Docker | Стек собирается за минуты без суперюзера (`pg_monitor`); алерт на диск отработал; «нет алерта» ≠ «всё ок» |
+| [hw06](hw06/) | Тюнинг WAL/checkpoint: производительность vs надёжность, восстановление, сжатие WAL | GCP e2-standard-4 | `synchronous_commit=off` +80% записи; редкий чекпойнт → дольше восстановление; сжатие WAL ×4.9 на заполненных страницах |
 
 ## Ключевые находки
 
@@ -29,6 +30,8 @@
 | **hw04:** цена синхронности растёт `off→remote_apply`; ждать обе реплики дороже кворума | **hw04:** `hot_standby_feedback=on` спасает долгий запрос на реплике от вакуума мастера |
 | [![мониторинг PG](hw05/images/grafana_postgres.png)](hw05/) | [![алерт на диск](hw05/images/vmalert_diskspacelow.png)](hw05/) |
 | **hw05:** дашборд PostgreSQL под нагрузкой 25k TPS (VictoriaMetrics + Grafana) | **hw05:** алерт `DiskSpaceLow` сработал и доехал до Alertmanager |
+| [![производительность vs WAL](hw06/images/perf_matrix.png)](hw06/) | [![сжатие WAL](hw06/images/wal_compression.png)](hw06/) |
+| **hw06:** `synchronous_commit=off` +80% записи; `wal_compression` режет WAL ×4.9 | **hw06:** выгода сжатия WAL зависит от данных: ×4.9 на заполненных, ×1.1 на случайных |
 
 ## Стенды
 
