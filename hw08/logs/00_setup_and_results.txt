@@ -1,0 +1,47 @@
+# hw08 — Chicago Taxi 10ГБ: ускорение аналитики + 300 партиций (*)
+# Стенд: GCP e2-standard-4, pd-ssd 100GB, Ubuntu 24.04, PostgreSQL 18.4 (PGDG), конфиг курса
+#        (shared_buffers 4GB, work_mem 64MB, max_parallel_workers_per_gather 4).
+
+### Загрузка данных (gcsfuse) ###
+# смонтировали публичный бакет gs://chicago10 (43 файла taxi.csv.*), gcsfuse 3.9.2 из GitHub-релиза
+gcsfuse --implicit-dirs -o ro chicago10 ~/taxi
+# таблица taxi_trips (схема из 08 shema ДЗ.txt), загрузка циклом:
+for f in taxi.csv.*; do psql -d taxi -qc "\copy taxi_trips FROM PROGRAM 'cat \"$f\"' CSV HEADER"; done
+# Итог: 26 753 683 строки, 11 GB, загрузка 6м41с.
+
+### Целевой запрос ###
+SELECT payment_type, round(sum(tips)/sum(tips+fare)*100) tips_percent, count(*)
+FROM taxi_trips GROUP BY payment_type ORDER BY 3 DESC;
+
+### Результаты (Execution Time) ###
+способ                                  | время     | примечание
+----------------------------------------+-----------+------------------------------------------
+Seq Scan, JIT on (базлайн)              | 8 563 мс  | Parallel Seq Scan, read ~933k блоков; JIT ~2.9с из 8.5
+Seq Scan, JIT off                       | 3 775 мс  | JIT на этом запросе только вредит
+Index Only Scan, ДО VACUUM ANALYZE      | 7 479 мс  | Heap Fetches: 5 815 723 (visibility map не выставлена)
+Index Only Scan, ПОСЛЕ VACUUM ANALYZE   | 4 456 мс  | Heap Fetches: 0, читает ~1.1ГБ индекса вместо 11ГБ
+matview (преагрегат)                    |   2.2 мс  | размер 24 КБ; ×3800 быстрее базлайна
+300 партиций (hash), JIT off            | 38 500 мс | Parallel Append во все 300 секций
+300 партиций (hash), JIT on             | 66 927 мс | JIT Functions: 3038; +28с к запросу
+
+### Команды оптимизации ###
+CREATE INDEX idx_taxi_cov ON taxi_trips (payment_type) INCLUDE (tips, fare);   -- 67.8 с
+VACUUM ANALYZE taxi_trips;                                                     -- 68.4 с (КЛЮЧЕВОЙ шаг!)
+CREATE MATERIALIZED VIEW mv_tips AS SELECT payment_type, sum(tips) s_tips, sum(tips+fare) s_base, count(*) cnt
+  FROM taxi_trips GROUP BY payment_type;                                       -- 3.5 с
+SELECT payment_type, round(s_tips/s_base*100) tips_percent, cnt FROM mv_tips ORDER BY 3 DESC;  -- 2.2 мс
+
+### Задание со * — 300 hash-партиций ###
+CREATE TABLE taxi_part (LIKE taxi_trips) PARTITION BY HASH (unique_key);
+-- 300 секций через DO-loop (MODULUS 300, REMAINDER i)
+INSERT INTO taxi_part SELECT * FROM taxi_trips;   -- 3м34с (роутинг 26М строк по 300 секциям)
+VACUUM ANALYZE taxi_part;                          -- 8м08с (!) — операционная цена многих секций
+-- агрегат во все 300 секций: jit on 66.9с / jit off 38.5с; Planning 45-53мс
+-- JIT компилирует код для каждой секции: 48 функций (1 таблица) -> 3038 функций (300 секций) = ×63
+
+### Выводы ###
+# 1. Индекс на OLAP-агрегате не помогает без VACUUM ANALYZE (heap fetches 5.8М -> 0).
+# 2. Преагрегат (matview) — лучший ответ для повторяемой аналитики (×3800), ценой пересчёта.
+# 3. JIT на этом запросе вредит (8.5->3.8с без него); на 300 секциях — катастрофа (3038 функций, +28с).
+# 4. Секционирование с агрегатом ВО ВСЕ секции = на порядок медленнее (38.5 vs 3.8с) — антипаттерн
+#    (подтверждает находку hw03). Партиционировать только если запросы уходят в 1-несколько секций.
