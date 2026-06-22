@@ -4,9 +4,10 @@
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?logo=ubuntu&logoColor=white)
 ![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-4B%208GB-A22846?logo=raspberrypi&logoColor=white)
 ![GCP](https://img.shields.io/badge/GCP-e2--standard--4-4285F4?logo=googlecloud&logoColor=white)
-![Курс](https://img.shields.io/badge/курс-9%2F10_занятий-blue)
+![Курс](https://img.shields.io/badge/курс-10%2F10_занятий-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-Домашние задания практического курса по оптимизации и администрированию **PostgreSQL 18** (10 занятий; в репозитории — 9 готовых работ). Воспроизводимые эксперименты: тюнинг ОС и СУБД, пулинг соединений, файловые системы, бэкапы и репликация, мониторинг, WAL/checkpoint, автовакуум и проектирование схемы данных. Каждая работа оформлена единообразно — **стенд, методика, замеры, графики и выводы** со ссылками на исходные логи и конфиги.
+Домашние задания практического курса по оптимизации и администрированию **PostgreSQL 18** (10 занятий, все работы готовы). Воспроизводимые эксперименты: тюнинг ОС и СУБД, пулинг соединений, файловые системы, бэкапы и репликация, мониторинг, WAL/checkpoint, автовакуум, проектирование схемы данных, оптимизация запросов и обслуживание СУБД. Каждая работа оформлена единообразно — **стенд, методика, замеры, графики и выводы** со ссылками на исходные логи и конфиги.
 
 Структура каждой работы: `hwNN/README.md` (отчёт) · `hwNN/images/` (графики) · `hwNN/logs/` (команды, сырые замеры, конфиги — для воспроизведения).
 
@@ -14,7 +15,7 @@
 
 | ДЗ | Тема | Стенд | Главный результат |
 |---|---|---|---|
-| [hw01](hw01/) | Первичная настройка ОС и PostgreSQL: бенчмарки и тюнинг | Raspberry Pi 4B | Отключение fsync: ×2.9 TPS на записи; тюнинг памяти: +17% на чтении |
+| [hw01](hw01/) | Первичная настройка ОС и PostgreSQL: бенчмарки и тюнинг | Raspberry Pi 4B | Отключение fsync: ×2.9 TPS на записи; тюнинг памяти: +14% на чтении |
 | [hw02](hw02/) | Коннектинг: vanilla vs PgBouncer vs Odyssey vs HAProxy при 500+ коннектах | GCP e2-standard-4 | Пулер — не ускоритель: ваниль быстрее на быстрых запросах, но деградирует вдвое круче; оптимум пула ≈ 2×ядра |
 | [hw03](hw03/) | ФС: секционирование по дням, секции на 3 дисках, COPY vs pgloader, ext4/xfs/btrfs | GCP + 3 диска | Pruning: ×49 по ключу, медленнее мимо ключа; COPY ×20 быстрее pgloader; разница ФС ≤15% |
 | [hw04](hw04/) | Репликация: синхр./асинхр./каскад, 5 уровней синхронного коммита, hot_standby_feedback | GCP, 3 ВМ | Синхронность вдвое режет запись на `on`; каскад не грузит мастер; `2S_ALL` медленнее кворума |
@@ -23,6 +24,7 @@
 | [hw07](hw07/) | Тюнинг автовакуума на профиле update+delete: убираем пилу TPS | GCP e2-standard-4 | Дефолт = пила (CV 31%), отключение = деградация (CV 52%), частый автовакуум малыми порциями = ровно (CV 11%) и быстрее |
 | [hw08](hw08/) | Схема данных: ускорение аналитики Chicago Taxi (10 ГБ) + 300 партиций | GCP e2-standard-4 | matview ×3800 быстрее; индексу нужен VACUUM ANALYZE; 300 партиций во все секции ×10 медленнее, JIT = 3038 функций |
 | [hw09](hw09/) | Оптимизация запросов: отчёт по поездкам на 60 млн строк | GCP e2-standard-4 | Декартов взрыв → раздельные агрегаты (>180с→43с); индекс на FK (43→12с); преагрегат 0.18 мс |
+| [hw10](hw10/) | Обслуживание СУБД: стенд с проблемами, аудит по чеклисту, pg_repack/pgcompacttable/pg_squeeze | GCP e2-standard-4 | Блоат рушит READ ×6 (лечит REINDEX); VACUUM не жмёт файл; repack/squeeze 16–18с но резкий провал TPS, compacttable ровный но ×24 медленнее |
 
 ## Ключевые находки
 
@@ -42,14 +44,16 @@
 | **hw07:** дефолтный автовакуум даёт пилу TPS; частый малыми порциями — ровную линию | **hw07:** `n_dead_tup` во времени: монотонный рост (rare) vs пила (default) vs коридор (tuned) |
 | [![способы ускорения](hw08/images/speedup_ways.png)](hw08/) | [![JIT на партициях](hw08/images/jit_partitions.png)](hw08/) |
 | **hw08:** matview ×3800 быстрее; индексу нужен VACUUM ANALYZE; 300 партиций ×10 медленнее | **hw08:** JIT на 300 секциях = 3038 функций, +28 с (продолжение hw03) |
-| [![лестница оптимизации](hw09/images/optimization_ladder.png)](hw09/) | |
-| **hw09:** отчёт на 60 млн строк: декартов взрыв → раздельные агрегаты → индекс → преагрегат (>180с → 0.18мс) | |
+| [![лестница оптимизации](hw09/images/optimization_ladder.png)](hw09/) | [![аудит стенда](hw10/images/audit_recovery.png)](hw10/) |
+| **hw09:** отчёт на 60 млн строк: декартов взрыв → раздельные агрегаты → индекс → преагрегат (>180с → 0.18мс) | **hw10:** аудит по чеклисту: блоат рушит READ ×6, VACUUM FULL и REINDEX возвращают базлайн |
+| [![переупаковка под нагрузкой](hw10/images/repack_under_load.png)](hw10/) | [![жизненный цикл блоата](hw10/images/bloat_lifecycle.png)](hw10/) |
+| **hw10:** repack/squeeze быстры (16–18с), но дают резкий провал TPS; pgcompacttable ровный, но ×24 медленнее | **hw10:** VACUUM не сжимает файл; REINDEX жмёт индекс, VACUUM FULL — heap |
 
 ## Стенды
 
 - **Raspberry Pi 4B** (4×Cortex-A72, 8 ГБ, microSD) — узкое место IO: эффекты fsync, чекпоинтов и WAL видны невооружённым глазом (hw01).
 - **GCP e2-standard-4** (4 vCPU, 16 ГБ, pd-ssd) — повторяет лекционный стенд курса; в разных топологиях:
-  - одна ВМ — пулеры, файловые системы, WAL/checkpoint, автовакуум, схема данных (hw02, 03, 06, 07, 08);
+  - одна ВМ — пулеры, файловые системы, WAL/checkpoint, автовакуум, схема данных, оптимизация запросов, обслуживание (hw02, 03, 06, 07, 08, 09, 10);
   - **3 ВМ** — мастер + две реплики для физической/каскадной репликации и pg_rewind (hw04);
   - **+ Docker** — стек мониторинга в контейнерах (hw05);
   - **+ доп. диски** — секции на pd-ssd/pd-standard, сравнение ФС (hw03).
@@ -61,6 +65,7 @@
 - **Мониторинг:** [VictoriaMetrics](https://victoriametrics.com/) · [Grafana](https://grafana.com/) · [postgres_exporter](https://github.com/prometheus-community/postgres_exporter) · node_exporter · vmalert + Alertmanager
 - **Диагностика:** `pg_stat_statements` · `pg_buffercache` · `pageinspect` · `pg_waldump` · `pg_test_fsync` · `pg_stat_progress_*`
 - **Репликация и восстановление:** `pg_basebackup` · `pg_rewind` · слоты репликации
+- **Обслуживание и переупаковка:** `VACUUM` / `REINDEX CONCURRENTLY` · [pg_repack](https://github.com/reorg/pg_repack) · [pgcompacttable](https://github.com/dataegret/pgcompacttable) · [pg_squeeze](https://github.com/cybertec-postgresql/pg_squeeze) · `pgstattuple`
 - **Данные:** [«Тайские перевозки»](https://github.com/aeuge/postgres16book/tree/main/database) (~5 млн строк) · Chicago Taxi (~27 млн строк, 11 ГБ, через [gcsfuse](https://github.com/GoogleCloudPlatform/gcsfuse))
 - **Инфраструктура:** GCP Compute Engine · Docker Compose · [pgconfigurator](https://pgconfigurator.cybertec.at/)
 
@@ -73,3 +78,7 @@
 - [Routine Vacuuming](https://www.postgresql.org/docs/current/routine-vacuuming.html) — автовакуум и защита от XID wraparound
 - [Цикл «Постгрес изнутри» Егора Рогова](https://habr.com/ru/companies/postgrespro/articles/) — буферный кеш, MVCC, индексы, блокировки
 - [How to SCRAM with pgBouncer](https://www.crunchydata.com/blog/pgbouncer-scram-authentication-postgresql) — аутентификация через пулер
+
+## Лицензия
+
+[MIT](LICENSE). Учебные материалы курса (презентации, исходные скрипты лектора) в репозиторий не входят и защищены авторским правом их владельцев.

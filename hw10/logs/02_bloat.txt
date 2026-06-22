@@ -1,0 +1,45 @@
+============================================================
+hw10 — создание блоата и жизненный цикл его устранения
+============================================================
+
+------------------------------------------------------------
+1) FK на текстовое поле (схемный антипаттерн из _bad.sql)
+------------------------------------------------------------
+ALTER TABLE book.tickets DROP CONSTRAINT tickets_fkride_fkey;        -- 21 ms
+ALTER TABLE book.tickets ALTER COLUMN fkride TYPE text;              -- 125 941 ms (rewrite 54M)
+ALTER TABLE book.ride    ALTER COLUMN id     TYPE text;              -- 4 021 ms
+ALTER TABLE book.tickets ADD FOREIGN KEY (fkride) REFERENCES book.ride(id);  -- 66 853 ms (validate)
+-- найдено в аудите: FK-столбец типа text + ride.id text вместо integer
+
+------------------------------------------------------------
+2) Массовый UPDATE при autovacuum=off → блоат
+------------------------------------------------------------
+sizes до UPDATE:   tickets 5096 MB | tickets_pkey 1178 MB
+UPDATE book.tickets SET fio = fio || '1';        -- UPDATE 54 980 875, 420 336 ms (7:00)
+sizes после UPDATE: tickets 10 GB  | tickets_pkey 2356 MB     (~2× оба)
+
+pgstattuple('book.tickets') на дне:
+  table_len          = 10 764 967 936  (10 GB)
+  tuple_count        = 54 980 875       tuple_percent      = 46.56
+  dead_tuple_count   = 54 980 875       dead_tuple_percent = 46.04
+  free_percent       = 0.53            ← расти некуда, половина файла мертва
+pgstatindex('book.tickets_pkey'):
+  index_size = 2 469 945 344 (2.47 GB)  avg_leaf_density = 83.97  leaf_fragmentation = 50
+
+------------------------------------------------------------
+3) Жизненный цикл устранения (что и чем сжимается)
+------------------------------------------------------------
+Стадия                 | heap   | pkey   | урок
+-----------------------+--------+--------+--------------------------------
+до UPDATE              | 5096 M | 1178 M | здоровое состояние
+блоат (UPDATE)         | 10 GB  | 2356 M | ×2
+VACUUM ANALYZE         | 10 GB  | 2376 M | dead 46%→0, free→49% — но ФАЙЛ НЕ СЖАЛСЯ (4:36)
+REINDEX CONCURRENTLY   | 10 GB  | 1198 M | сжался ТОЛЬКО индекс (1:34); density 90, frag 0
+VACUUM FULL            | 5261 M | 1198 M | переписал хип 10→5 ГБ (4:13), ACCESS EXCLUSIVE
+
+VACUUM:  возвращает мёртвые строки в FSM (переиспользуемо), файл на диске НЕ уменьшает.
+REINDEX CONCURRENTLY: перестраивает индекс компактно, без долгой блокировки.
+VACUUM FULL / pg_repack / pg_compacttable / pg_squeeze: реально сжимают heap-файл.
+
+После VACUUM: dead_tuple_percent=0, free_percent=49.11, table_len=10 854 350 848 (тот же ~10 GB).
+После VACUUM FULL: table_len=5 516 894 208 (5261 MB), free_percent=0.6.

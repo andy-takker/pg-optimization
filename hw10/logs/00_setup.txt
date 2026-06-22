@@ -1,0 +1,100 @@
+============================================================
+hw10 — Обслуживание СУБД. Стенд и конфигурации
+============================================================
+Стенд: GCP e2-standard-4 (4 vCPU, 16 ГБ), europe-west1-b, pd-ssd 50 ГБ,
+Ubuntu 24.04, PostgreSQL 18.4 (PGDG).
+БД: thai (thai_medium), book.tickets = 53 997 475 строк, 6056 МБ.
+
+# --- Бутстрап ---
+gcloud compute instances create postgres10 --zone=europe-west1-b \
+  --machine-type=e2-standard-4 --image-family=ubuntu-2404-lts-amd64 \
+  --image-project=ubuntu-os-cloud --boot-disk-size=50GB --boot-disk-type=pd-ssd
+sudo apt update && sudo apt upgrade -y
+# PGDG репа + postgresql-18 unzip atop iotop
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'admin123#';"
+# .pgpass: localhost:5432:*:postgres:admin123#
+cd ~ && wget .../thai_medium.tar.gz && tar -xf ... && psql < thai.sql
+
+============================================================
+ЭТАЛОННЫЙ конфиг курса (базлайн) — добавлено в postgresql.conf
+============================================================
+shared_buffers = 4096MB
+work_mem = 32MB
+maintenance_work_mem = 320MB
+huge_pages = off
+effective_cache_size = 11GB
+effective_io_concurrency = 100
+random_page_cost = 1.1
+shared_preload_libraries = pg_stat_statements
+track_io_timing = on
+track_functions = pl
+wal_level = replica
+max_wal_senders = 2
+synchronous_commit = on
+checkpoint_timeout = 15min
+checkpoint_completion_target = 0.9
+max_wal_size = 1024MB
+min_wal_size = 512MB
+wal_compression = on
+wal_buffers = -1
+max_worker_processes = 4
+max_parallel_workers_per_gather = 2
+max_parallel_maintenance_workers = 2
+max_parallel_workers = 4
+parallel_leader_participation = on
+jit = on
+
+Рестарт: sudo systemctl restart postgresql@18-main
+
+============================================================
+BAD overrides (порча стенда — настройки)
+============================================================
+# ОС
+vm.swappiness = 100
+transparent_hugepage = always
+# postgresql.conf (последнее значение побеждает)
+random_page_cost = 10
+max_wal_size = 32MB
+min_wal_size = 32MB
+wal_compression = off
+max_worker_processes = 1
+max_parallel_workers_per_gather = 1
+max_parallel_maintenance_workers = 1
+max_parallel_workers = 1
+log_statement = all
+autovacuum = off
+
+============================================================
+AUDIT FIX (возврат к эталону)
+============================================================
+# ОС: vm.swappiness=1, transparent_hugepage=never
+# PG: random_page_cost=1.1, max_wal_size=1024MB/min 512MB, wal_compression=on,
+#     все max_parallel_*=4/2, log_statement=none, autovacuum=on
+
+============================================================
+Профили нагрузки (pgbench, /var/lib/postgresql/*.sql)
+============================================================
+# read.sql  — точечная выборка по PK
+\set r random(1, 53000000)
+SELECT id, fkRide, fio, contact, fkSeat FROM book.tickets WHERE id = :r;
+
+# write.sql — INSERT с автокоммитом (генерация fio/contact)
+INSERT INTO book.tickets (fkRide, fio, contact, fkSeat)
+VALUES (ceil(random()*100),
+  (array(SELECT fam FROM book.fam))[ceil(random()*110)]::text || ' ' ||
+  (array(SELECT nam FROM book.nam))[ceil(random()*110)]::text,
+  ('{"phone":"+7' || (1000000000::bigint + floor(random()*9000000000)::bigint)::text || '"}')::jsonb,
+  ceil(random()*100));
+
+# report.sql — тяжёлый отчёт по поездкам (раздельные агрегаты, наследие hw09)
+WITH all_place AS (SELECT count(s.id) AS all_place, s.fkbus FROM book.seat s GROUP BY s.fkbus),
+     order_place AS (SELECT count(t.id) AS order_place, t.fkride FROM book.tickets t GROUP BY t.fkride)
+SELECT r.id, r.startdate AS depart_date, bs.city||', '||bs.name AS busstation, op.order_place, ap.all_place
+FROM book.ride r JOIN book.schedule s ON r.fkschedule=s.id JOIN book.busroute br ON s.fkroute=br.id
+JOIN book.busstation bs ON br.fkbusstationfrom=bs.id JOIN order_place op ON op.fkride=r.id
+JOIN all_place ap ON r.fkbus=ap.fkbus ORDER BY r.startdate LIMIT 10;
+
+Команды замера (медиана 3 прогонов):
+pgbench -c 10 -j 4 -T 30 -n -f read.sql  thai     # READ TPS
+psql -d thai -f report.sql (\timing)              # REPORT, с
+pgbench -c 10 -j 4 -T 30 -n -f write.sql thai     # WRITE TPS
