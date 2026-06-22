@@ -1,0 +1,43 @@
+# hw09 — оптимизация запроса «отчёт по поездкам» на БД 60 млн строк
+# Стенд: GCP e2-standard-4, pd-ssd 100GB, Ubuntu 24.04, PostgreSQL 18.4 (PGDG), конфиг курса
+#        (shared_buffers 4GB, work_mem 64MB, max_parallel_workers_per_gather 4).
+# БД thai_medium (book.tickets 53 997 475) + догенерация до 60 000 000 (валидные fkRide 1..1.5M, fkSeat 1..200).
+
+### Схема (ключевое): цена — в book.schedule.price (numeric), НЕ в seatcategory ###
+# revenue (заработок на рейсе) = order_place * schedule.price
+# город от/до: busroute.fkbusstationfrom / fkbusstationto -> busstation (2 JOIN)
+
+### ДЗ-запрос: список поездок (город от/до, мест всего, занято, заработок) ###
+
+## Лесенка оптимизации (Execution Time) ##
+вариант                                   | время       | ключевое
+------------------------------------------+-------------+-------------------------------------------
+наивный 5-JOIN (tickets × seat, 2 count)  | >180 000 мс | ТАЙМАУТ; декартов взрыв = 2.4 млрд строк, cost 113.9M
+раздельные агрегаты (2 CTE)               |   43 335 мс | нет взрыва; но Seq Scan 60M широкого heap (~15 ГБ) ×3 воркера
++ индекс tickets(fkRide)                  |   12 003 мс | Index Only Scan (Heap Fetches: 0) вместо чтения heap
++ jit=off                                 |   12 003 мс | JIT тут НЕ узкое место (в отличие от hw08)
+matview-преагрегат (отчёт)                |     0.18 мс | потолок; build matview 10 с, отчёт = Index Scan по depart_date
+
+# Итог: наивный не досчитался за 180 с; раздельные агрегаты 43 с; индекс fkRide 12 с;
+# преагрегат 0.18 мс (×240 000 от CTE-варианта, и ×66 000 от варианта с индексом).
+
+### Команды ###
+# догенерация:
+INSERT INTO book.tickets (fkRide, fio, contact, fkSeat)
+SELECT (floor(random()*1500000)+1)::int, 'TEST', '{}'::jsonb, (floor(random()*200)+1)::int
+FROM generate_series(1, 6002525);
+VACUUM ANALYZE book.tickets;
+# индекс:
+CREATE INDEX idx_tickets_fkride ON book.tickets(fkRide);   -- 37.7 с
+# преагрегат:
+CREATE MATERIALIZED VIEW book.mv_rides AS <оптимизированный запрос без LIMIT>;  -- 10 с
+CREATE INDEX ON book.mv_rides(depart_date);
+SELECT * FROM book.mv_rides ORDER BY depart_date LIMIT 10;  -- 0.18 мс
+
+### Выводы ###
+# 1. Главный рычаг — НЕ джойнить tickets и seat в одном запросе с count(): два независимых
+#    count() дают декартово произведение (2.4 млрд строк). Раздельные агрегаты (CTE/подзапросы)
+#    убирают взрыв: >180с -> 43с.
+# 2. Индекс на FK (tickets.fkRide) -> Index Only Scan по узкому индексу вместо чтения 15-ГБ heap: 43с -> 12с.
+# 3. JIT тут не помогал и не мешал (jit on/off = 12с): узкое место — объём данных агрегации, не CPU выражений.
+# 4. Преагрегат (matview) — потолок для повторяемого отчёта: 0.18 мс (как в hw08), ценой пересчёта (10 с).
